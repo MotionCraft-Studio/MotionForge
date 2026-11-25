@@ -1,0 +1,46 @@
+name: Build Safe Windows EXE (Tauri v2)
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+      - run: npm install
+      - run: npm run build
+      - name: Build Windows .EXE
+        if: "!startsWith(github.ref, 'refs/tags/')"
+        run: npx --yes @tauri-apps/cli@^2 build
+      - name: Build & Release Windows .EXE
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: 'MotionForge ${{ github.ref_name }}'
+      - name: Upload Windows .EXE Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MotionForge-Windows-EXE
+          path: src-tauri/target/release/bundle/nsis/*.exe
